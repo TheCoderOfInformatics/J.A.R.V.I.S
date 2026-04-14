@@ -1,0 +1,34 @@
+# JARVIS — Autonomous AI Assistant
+# Requires Python 3.9+
+#
+# Install:  pip install -r requirements.txt
+#
+# Optional high-quality TTS (Microsoft Neural voices):
+#   pip install edge-tts pygame
+#   Then set env variable: set JARVIS_EDGE_TTS=1
+#   For German voice: set JARVIS_VOICE=de-DE-ConradNeural
+
+# Core AI + STT (Groq — kostenlos, kein Kreditkarte nötig)
+groq>=0.9.0
+
+# Voice input (kein PyAudio nötig — läuft auf Python 3.14)
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# Voice output (offline, always works)
+pyttsx3>=2.90
+
+# Neural TTS (Microsoft Conrad — männliche deutsche Stimme, Standard)
+edge-tts>=6.1.0
+pygame-ce>=2.5.0      # pygame Community Edition (funktioniert auf Python 3.14+)
+
+# System tools
+psutil>=5.9.0
+requests>=2.31.0
+
+# Web search (no API key required)
+duckduckgo-search>=6.0.0
+
+# System-Tray-Icon (Hintergrund-Betrieb)
+pystray>=0.19.0
+pillow>=10.0.0

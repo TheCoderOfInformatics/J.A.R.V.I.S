@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>JARVIS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100vw;height:100vh;
+  background:#030010;overflow:hidden;
+  font-family:'Courier New',Courier,monospace;
+  -webkit-app-region:drag;
+  user-select:none;
+}
+canvas{
+  position:fixed;top:0;left:0;
+  width:100%;height:100%;
+  -webkit-app-region:no-drag;
+}
+
+/* ─── Top bar ─────────────────────────────────────────────── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:54px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  background:linear-gradient(180deg,rgba(3,0,20,.98) 0%,rgba(3,0,16,.4) 100%);
+  border-bottom:1px solid rgba(140,0,255,.2);
+  z-index:10;pointer-events:none;
+}
+#logo{display:flex;align-items:center;gap:13px}
+#logo-dot{
+  width:9px;height:9px;border-radius:50%;
+  background:#9900ff;box-shadow:0 0 14px #9900ff,0 0 28px #9900ff55;
+  animation:blink-dot 2s ease-in-out infinite;
+}
+@keyframes blink-dot{0%,100%{opacity:1}50%{opacity:.18}}
+#logo-text{
+  font-size:14px;letter-spacing:7px;color:#bb44ff;font-weight:bold;
+  text-shadow:0 0 20px rgba(180,0,255,.5);
+}
+#top-center{
+  position:absolute;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:4px;
+  color:rgba(190,100,255,.65);
+  text-shadow:0 0 12px rgba(160,0,255,.35);
+  transition:opacity .6s;
+}
+#top-right{display:flex;align-items:center;gap:16px}
+#state-badge{
+  font-size:9px;letter-spacing:3px;padding:3px 13px;
+  border:1px solid currentColor;border-radius:2px;
+  transition:all .5s ease;
+}
+#top-time{font-size:10px;letter-spacing:2px;color:rgba(140,40,255,.45)}
+
+/* ─── Conversation panel ──────────────────────────────────── */
+#conv{
+  position:fixed;bottom:56px;left:0;right:0;height:24%;
+  background:linear-gradient(180deg,transparent 0%,rgba(3,0,18,.97) 7%);
+  border-top:1px solid rgba(110,0,220,.14);
+  display:flex;flex-direction:column;
+  padding:10px 28px 14px;
+  z-index:10;pointer-events:none;overflow:hidden;
+}
+
+/* ─── Remote chat input bar ──────────────────────────────────── */
+#chatbar{
+  position:fixed;bottom:0;left:0;right:0;height:54px;
+  display:flex;align-items:center;gap:10px;
+  padding:0 20px;
+  background:rgba(3,0,18,.97);
+  border-top:1px solid rgba(110,0,220,.22);
+  z-index:20;pointer-events:auto;
+}
+#chatbar input{
+  flex:1;height:36px;
+  background:rgba(80,0,160,.12);
+  border:1px solid rgba(140,0,255,.3);
+  border-radius:6px;
+  color:#d0b0ff;font-family:inherit;font-size:14px;
+  padding:0 14px;outline:none;
+  transition:border-color .2s;
+}
+#chatbar input:focus{border-color:#9900ff}
+#chatbar input::placeholder{color:rgba(160,100,255,.35);font-size:12px}
+#chatbar button{
+  width:38px;height:38px;border-radius:50%;border:none;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .2s;flex-shrink:0;
+}
+#btn-send{background:rgba(130,0,255,.45);color:#d0b0ff}
+#btn-send:hover{background:rgba(160,0,255,.65)}
+#btn-mic{background:rgba(80,0,160,.3);color:#bb77ff}
+#btn-mic:hover{background:rgba(120,0,200,.45)}
+#btn-mic.recording{background:rgba(255,0,100,.5);color:#fff;animation:mic-pulse 1s ease infinite}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,100,.4)}50%{box-shadow:0 0 0 10px rgba(255,0,100,0)}}
+.msg{
+  display:flex;gap:13px;align-items:flex-start;
+  opacity:0;
+  animation:msg-in .45s cubic-bezier(.22,.68,0,1.2) forwards;
+  margin-bottom:8px;flex-shrink:0;
+}
+@keyframes msg-in{
+  from{opacity:0;transform:translateY(10px)}
+  to  {opacity:1;transform:none}
+}
+.msg-role{
+  font-size:9px;letter-spacing:2px;
+  min-width:52px;padding-top:2px;
+  font-weight:bold;white-space:nowrap;
+}
+.msg-role.jarvis{color:#aa44ff;text-shadow:0 0 10px #aa44ff}
+.msg-role.sir   {color:#dd88ff;text-shadow:0 0 10px #dd88ff}
+.msg-text{
+  font-size:13px;line-height:1.6;
+  color:#d0b0ff;word-break:break-word;
+}
+.msg.old .msg-text{color:#321850}
+.msg.old .msg-role{opacity:.28}
+
+/* Typing indicator */
+#typing{display:none;align-items:center;gap:6px;margin-bottom:10px;flex-shrink:0}
+#typing.on{display:flex}
+.td{width:5px;height:5px;border-radius:50%;background:#8800ff;animation:tdb .9s ease infinite}
+.td:nth-child(2){animation-delay:.16s}
+.td:nth-child(3){animation-delay:.32s}
+@keyframes tdb{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+#typing-label{font-size:9px;letter-spacing:3px;color:rgba(130,0,210,.6)}
+
+/* ─── Audio level bar ─────────────────────────────────────── */
+#listen-bar{
+  position:fixed;bottom:0;left:0;height:2px;width:0%;
+  background:linear-gradient(90deg,transparent,#8800ff,#cc44ff,#ff00cc,#cc44ff,#8800ff,transparent);
+  transition:width .05s;pointer-events:none;z-index:20;
+}
+
+/* ─── Corner brackets ─────────────────────────────────────── */
+.brk{
+  position:fixed;width:24px;height:24px;
+  border-color:rgba(120,0,240,.35);border-style:solid;
+  pointer-events:none;z-index:5;
+}
+.brk.tl{top:62px;left:12px;  border-width:1px 0 0 1px}
+.brk.tr{top:62px;right:12px; border-width:1px 1px 0 0}
+.brk.bl{bottom:62px;left:12px;  border-width:0 0 1px 1px}
+.brk.br{bottom:62px;right:12px; border-width:0 1px 1px 0}
+
+/* ─── CRT scanlines ───────────────────────────────────────── */
+#crt{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 2px,
+    rgba(3,0,14,.05) 2px,rgba(3,0,14,.05) 4px);
+  pointer-events:none;z-index:15;
+}
+
+/* ─── Scan sweep ──────────────────────────────────────────── */
+#scan{
+  position:fixed;top:0;left:0;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(170,0,255,.28) 50%,transparent);
+  pointer-events:none;z-index:14;
+  animation:scan-down 7s linear infinite;
+}
+@keyframes scan-down{from{top:0}to{top:100%}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="logo">
+    <div id="logo-dot"></div>
+    <span id="logo-text">J·A·R·V·I·S</span>
+  </div>
+  <span id="top-center">SYSTEM ONLINE</span>
+  <div id="top-right">
+    <span id="state-badge">STANDBY</span>
+    <span id="top-time">--:--:--</span>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<div id="conv">
+  <div id="typing">
+    <span class="td"></span><span class="td"></span><span class="td"></span>
+    <span id="typing-label">VERARBEITE</span>
+  </div>
+</div>
+
+<div id="chatbar">
+  <button id="btn-mic" title="Mikrofon">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="9" y="1" width="6" height="13" rx="3"/>
+      <path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="21" x2="12" y2="17"/>
+    </svg>
+  </button>
+  <input type="text" id="chat-input" placeholder="Nachricht an JARVIS …" autocomplete="off"/>
+  <button id="btn-send" title="Senden">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  </button>
+</div>
+
+<div id="listen-bar"></div>
+<div class="brk tl"></div><div class="brk tr"></div>
+<div class="brk bl"></div><div class="brk br"></div>
+<div id="crt"></div>
+<div id="scan"></div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let STATE='idle', LEVEL=0, BARS=new Array(28).fill(0), MSGS=[], USERNAME='';
+let sL=0, sB=new Array(28).fill(0);
+let prevMsgCount=0, prevState='';
+
+const LABELS={idle:'STANDBY',listening:'LISTENING',thinking:'PROCESSING',speaking:'SPEAKING'};
+const SCOL  ={idle:'#550099',listening:'#aa44ff',thinking:'#6633ff',speaking:'#cc00ff'};
+
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const cv=document.getElementById('c');
+const R=new THREE.WebGLRenderer({
+  canvas:cv, antialias:true, alpha:false,
+  powerPreference:'high-performance',
+});
+// Use the ACTUAL device pixel ratio — no artificial cap
+R.setPixelRatio(window.devicePixelRatio);
+R.setSize(innerWidth, innerHeight);
+R.toneMapping=THREE.ACESFilmicToneMapping;
+R.toneMappingExposure=0.88;
+
+// ── Scene + fog for depth ─────────────────────────────────────────────────────
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x030010);
+scene.fog=new THREE.FogExp2(0x030010, 0.028);
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+const cam=new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+cam.position.set(0, 1.8, 14);
+cam.lookAt(0, 0, 0);
+
+// ── Post-processing ───────────────────────────────────────────────────────────
+// CRITICAL: bloom resolution must match the ACTUAL framebuffer size (incl. devicePixelRatio)
+// If set to innerWidth/innerHeight, bloom renders 1x and upscales blurry.
+const composer=new EffectComposer(R);
+// Composer muss in echten Framebuffer-Pixeln arbeiten (nicht CSS-Pixel)
+const _dpr=window.devicePixelRatio;
+composer.setSize(innerWidth*_dpr, innerHeight*_dpr);
+composer.addPass(new RenderPass(scene,cam));
+const bloom=new UnrealBloomPass(
+  new THREE.Vector2(innerWidth*_dpr, innerHeight*_dpr), 1.9, .38, .06);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+window.addEventListener('resize',()=>{
+  const dpr=window.devicePixelRatio;
+  cam.aspect=innerWidth/innerHeight;
+  cam.updateProjectionMatrix();
+  R.setPixelRatio(dpr);
+  R.setSize(innerWidth,innerHeight);
+  // CRITICAL: composer + bloom müssen in echten Framebuffer-Pixeln arbeiten,
+  // nicht in CSS-Pixeln. Sonst wird alles bei 1x gerendert und hochskaliert → unscharf.
+  const w=innerWidth*dpr, h=innerHeight*dpr;
+  composer.setSize(w,h);
+  bloom.resolution.set(w,h);
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+// ── Lights — real 3D illumination ────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x180028, 0.45));
+
+// Central reactor glow — pulses with audio
+const reactLight=new THREE.PointLight(0xaa00ff, 10, 55);
+reactLight.position.set(0, 0, 0);
+scene.add(reactLight);
+
+// Two fill lights orbit the reactor — create moving highlights on metallic surfaces
+const fill1=new THREE.PointLight(0x6600cc, 4.5, 35);
+const fill2=new THREE.PointLight(0xff00bb, 3.5, 28);
+scene.add(fill1); scene.add(fill2);
+
+// Rim light from behind — gives depth
+const rimLight=new THREE.PointLight(0x3300aa, 3, 40);
+rimLight.position.set(0, 4, -12);
+scene.add(rimLight);
+
+// ── Hex grid — far background ─────────────────────────────────────────────────
+(()=>{
+  const mat=new THREE.LineBasicMaterial({color:0x0c0022,transparent:true,opacity:.55});
+  const pts=[]; const s=2.2, rows=24, cols=32;
+  for(let row=-rows;row<=rows;row++){
+    for(let col=-cols;col<=cols;col++){
+      const x=col*s*1.5, y=row*s*Math.sqrt(3)+(col%2?s*Math.sqrt(3)/2:0);
+      for(let i=0;i<6;i++){
+        const a1=i/6*Math.PI*2, a2=(i+1)/6*Math.PI*2;
+        pts.push(x+Math.cos(a1)*s*.9,y+Math.sin(a1)*s*.9,-28);
+        pts.push(x+Math.cos(a2)*s*.9,y+Math.sin(a2)*s*.9,-28);
+      }
+    }
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  scene.add(new THREE.LineSegments(g,mat));
+})();
+
+// ── Floor grid — adds 3D depth perception ────────────────────────────────────
+const floorGrid=new THREE.GridHelper(80,60,0x1a0033,0x0d0022);
+floorGrid.position.y=-7;
+floorGrid.material.transparent=true;
+floorGrid.material.opacity=0.28;
+scene.add(floorGrid);
+
+// ── Arc Reactor — SOLID 3D metallic with real lighting ───────────────────────
+
+// Outer metallic shell — reflects the moving lights
+const coreMat=new THREE.MeshStandardMaterial({
+  color:new THREE.Color(0x180030),
+  emissive:new THREE.Color(0x4a0088),
+  emissiveIntensity:0.45,
+  metalness:0.96,
+  roughness:0.05,
+});
+const core=new THREE.Mesh(new THREE.IcosahedronGeometry(1.1,5), coreMat);
+scene.add(core);
+
+// Wireframe overlay — holographic structure lines
+const wireMat=new THREE.MeshBasicMaterial({
+  color:0xaa00ff, wireframe:true, transparent:true, opacity:.15,
+});
+const coreWire=new THREE.Mesh(new THREE.IcosahedronGeometry(1.13,2), wireMat);
+scene.add(coreWire);
+
+// Inner glow sphere — bright emissive purple
+const innerMat=new THREE.MeshStandardMaterial({
+  color:0x3d0066,
+  emissive:0x8800cc,
+  emissiveIntensity:1.4,
+  metalness:0.0, roughness:1.0,
+  transparent:true, opacity:0.88,
+});
+const innerSphere=new THREE.Mesh(new THREE.SphereGeometry(0.72,48,48), innerMat);
+scene.add(innerSphere);
+
+// Bright core center — bloom creates lens flare
+const dotMat=new THREE.MeshBasicMaterial({color:0xffffff});
+const dot=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,16), dotMat);
+scene.add(dot);
+
+// ── Equatorial glow ring ──────────────────────────────────────────────────────
+const glowRingMat=new THREE.MeshStandardMaterial({
+  color:0x660099, emissive:0xaa00ff, emissiveIntensity:1.1,
+  metalness:0.85, roughness:0.08,
+  transparent:true, opacity:0.75,
+});
+const glowRing=new THREE.Mesh(new THREE.TorusGeometry(1.22,.016,16,128), glowRingMat);
+scene.add(glowRing);
+
+// ── Orbital rings — proper 3D metallic ───────────────────────────────────────
+function ring3d(r,tube,col,em,rx=0,ry=0,rz=0,op=0.92){
+  const mat=new THREE.MeshStandardMaterial({
+    color:col, emissive:em, emissiveIntensity:0.75,
+    metalness:0.92, roughness:0.07,
+    transparent:true, opacity:op,
+  });
+  const mesh=new THREE.Mesh(new THREE.TorusGeometry(r,tube,16,160),mat);
+  mesh.rotation.set(rx,ry,rz); scene.add(mesh); return mesh;
+}
+function arc3d(r,tube,col,em,ext,rx=0,rz=0){
+  const mat=new THREE.MeshStandardMaterial({
+    color:col, emissive:em, emissiveIntensity:1.05,
+    metalness:0.9, roughness:0.05, transparent:true, opacity:.96,
+  });
+  const mesh=new THREE.Mesh(new THREE.TorusGeometry(r,tube,16,160,ext),mat);
+  mesh.rotation.x=rx; mesh.rotation.z=rz; scene.add(mesh); return mesh;
+}
+
+const r1=ring3d(2.5,.022,0x280044,0x7700cc, Math.PI/2);
+const r2=ring3d(3.3,.016,0x1c0033,0x5500aa, Math.PI/3,Math.PI/5);
+const r3=ring3d(4.2,.010,0x130022,0x3a0077, Math.PI/6,0,Math.PI/4,.72);
+
+const a1=arc3d(2.5,.042,0x3d0066,0xaa00ff, Math.PI*.58,Math.PI/2);
+const a2=arc3d(2.5,.026,0x220044,0x7700cc, Math.PI*.30,Math.PI/2);
+
+// ── Bar equalizer — 28 radial bars at radius 5.0 ─────────────────────────────
+const EQ_R=5.0;
+const eqBars=[];
+for(let i=0;i<28;i++){
+  const angle=i/28*Math.PI*2;
+  const positions=new Float32Array(6);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  const m=new THREE.LineBasicMaterial({color:0xaa44ff,transparent:true,opacity:0});
+  eqBars.push({geo:g,mat:m,angle,positions});
+  scene.add(new THREE.Line(g,m));
+}
+
+// ── Particles — purple/violet field ──────────────────────────────────────────
+const PC=1800;
+const pG=new THREE.BufferGeometry();
+const pP=new Float32Array(PC*3), pV=new Float32Array(PC*3), pC=new Float32Array(PC*3);
+for(let i=0;i<PC;i++){
+  const r=2.2+Math.random()*10;
+  const t=Math.random()*Math.PI*2, p=Math.acos(2*Math.random()-1);
+  pP[i*3]=r*Math.sin(p)*Math.cos(t);
+  pP[i*3+1]=r*Math.sin(p)*Math.sin(t);
+  pP[i*3+2]=r*Math.cos(p)*.35;
+  pV[i*3]=(Math.random()-.5)*.0011;
+  pV[i*3+1]=(Math.random()-.5)*.0011;
+  pV[i*3+2]=(Math.random()-.5)*.0006;
+  // Pure purple palette — R+B, no G
+  const bright=Math.random()<.07;
+  pC[i*3  ]=bright?.85:.3+Math.random()*.45;
+  pC[i*3+1]=bright?.35:0;
+  pC[i*3+2]=bright?1.0:.65+Math.random()*.35;
+}
+pG.setAttribute('position',new THREE.BufferAttribute(pP,3));
+pG.setAttribute('color',   new THREE.BufferAttribute(pC,3));
+scene.add(new THREE.Points(pG,new THREE.PointsMaterial({
+  size:.026, vertexColors:true, transparent:true, opacity:.72,
+})));
+
+// ── Thinking orbits ───────────────────────────────────────────────────────────
+const tDots=[];
+[[10,.95,2.1],[6,.60,-3.3],[4,.38,4.8]].forEach(([n,rad,spd],orb)=>{
+  for(let i=0;i<n;i++){
+    const sz=[.058,.044,.032][orb];
+    const m=new THREE.MeshBasicMaterial({color:0x9900ff,transparent:true,opacity:0});
+    const o=new THREE.Mesh(new THREE.SphereGeometry(sz,8,8),m);
+    o.userData={orb,n,i,rad,spd}; scene.add(o); tDots.push(o);
+  }
+});
+
+// ── Listening sonar ───────────────────────────────────────────────────────────
+const sonars=[];
+for(let i=0;i<8;i++){
+  const m=new THREE.MeshBasicMaterial({
+    color:0xcc44ff,transparent:true,opacity:0,side:THREE.DoubleSide,
+  });
+  const o=new THREE.Mesh(new THREE.RingGeometry(0,.05,64),m);
+  o.rotation.x=Math.PI/2; scene.add(o); sonars.push(o);
+}
+
+// ── Speaking tendrils ─────────────────────────────────────────────────────────
+const tendrils=[];
+for(let i=0;i<16;i++){
+  const m=new THREE.LineBasicMaterial({color:0xcc00ff,transparent:true,opacity:0});
+  const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+  tendrils.push({l:new THREE.Line(g,m),g,m,ang:i/16*Math.PI*2});
+  scene.add(tendrils[i].l);
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const badgeEl    =document.getElementById('state-badge');
+const timeEl     =document.getElementById('top-time');
+const lvlEl      =document.getElementById('listen-bar');
+const convEl     =document.getElementById('conv');
+const topCenterEl=document.getElementById('top-center');
+
+// ── Conversation ──────────────────────────────────────────────────────────────
+function escHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderConv(msgs,state){
+  const isThinking=state==='thinking';
+  const th=`<div id="typing" class="${isThinking?'on':''}">
+    <span class="td"></span><span class="td"></span><span class="td"></span>
+    <span id="typing-label">VERARBEITE</span>
+  </div>`;
+  if(!msgs||!msgs.length){ convEl.innerHTML=th; return }
+  const n=msgs.length;
+  const mh=msgs.map((m,i)=>{
+    const rc=m.role.toLowerCase()==='jarvis'?'jarvis':'sir';
+    const old=i<n-2?'old':'';
+    const txt=m.text.length>210?m.text.slice(0,207)+'…':m.text;
+    return `<div class="msg ${old}">
+      <span class="msg-role ${rc}">${m.role}</span>
+      <span class="msg-text">${escHtml(txt)}</span>
+    </div>`;
+  }).join('');
+  convEl.innerHTML=th+mh;
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+const clock=new THREE.Clock();
+let camTZ=14, camTY=1.8;
+
+function frame(){
+  requestAnimationFrame(frame);
+  const t=clock.getElapsedTime();
+
+  // Buttery-smooth audio lerp — this is what makes it look fluid
+  sL=lerp(sL,LEVEL,.07);
+  for(let i=0;i<28;i++) sB[i]=lerp(sB[i],BARS[i]||0,.10);
+
+  // ── HUD ──────────────────────────────────────────────────────────────────
+  const label=LABELS[STATE]||'STANDBY';
+  if(badgeEl.textContent!==label){
+    badgeEl.textContent=label;
+    badgeEl.style.color=SCOL[STATE]||'#550099';
+    badgeEl.style.borderColor=SCOL[STATE]||'#550099';
+    badgeEl.style.boxShadow=`0 0 14px ${SCOL[STATE]||'#550099'}44`;
+  }
+  timeEl.textContent=new Date().toTimeString().slice(0,8);
+  lvlEl.style.width=(sL*100).toFixed(1)+'%';
+
+  // ── Conversation ──────────────────────────────────────────────────────────
+  if(MSGS.length!==prevMsgCount||STATE!==prevState){
+    prevMsgCount=MSGS.length; prevState=STATE;
+    renderConv(MSGS,STATE);
+  }
+
+  // ── Moving fill lights — create sweeping 3D highlights ───────────────────
+  fill1.position.set(
+    Math.cos(t*.38)*11, Math.sin(t*.28)*5,  Math.sin(t*.38)*9);
+  fill2.position.set(
+    Math.sin(t*.32)*10, Math.cos(t*.24)*6, -Math.cos(t*.32)*8);
+  reactLight.intensity=lerp(reactLight.intensity, 8+sL*14, .055);
+  reactLight.color.lerp(
+    new THREE.Color(STATE==='thinking'?0x6633ff:STATE==='listening'?0xcc44ff:0xaa00ff),.04);
+
+  // ── Bloom — smooth state-based glow ──────────────────────────────────────
+  const bt=STATE==='speaking'?2.4+sL*1.5:STATE==='thinking'?2.0:STATE==='listening'?2.2+sL*0.9:1.8;
+  bloom.strength=lerp(bloom.strength,bt,.04);
+
+  // ── Rings ─────────────────────────────────────────────────────────────────
+  r1.rotation.z+=.011+sL*.015;
+  r2.rotation.z-=.007+sL*.010; r2.rotation.y+=.004;
+  r3.rotation.x+=.003; r3.rotation.z+=.007;
+  a1.rotation.z=t*1.28;
+  a2.rotation.z=-t*.80+Math.PI;
+  glowRing.rotation.z=t*.20;
+  glowRingMat.opacity=lerp(glowRingMat.opacity,.55+sL*.45,.05);
+  glowRing.scale.setScalar(lerp(glowRing.scale.x,1+sL*.09,.06));
+
+  // ── Core — solid 3D with emissive reactivity ──────────────────────────────
+  const tp=1+Math.sin(t*2.3)*.05+sL*.20;
+  const cs=core.scale.x;
+  core.scale.setScalar(lerp(cs,tp,.07));
+  coreWire.scale.setScalar(lerp(coreWire.scale.x,tp,.07));
+  innerSphere.scale.setScalar(lerp(innerSphere.scale.x,tp*.82,.07));
+  dot.scale.setScalar(lerp(dot.scale.x,.8+sL*1.1,.07));
+  core.rotation.y+=.006+sL*.018; core.rotation.x+=.003;
+  coreWire.rotation.copy(core.rotation);
+
+  // Emissive reacts to speaking/audio
+  coreMat.emissiveIntensity=lerp(coreMat.emissiveIntensity,.42+sL*.85,.05);
+  innerMat.emissiveIntensity=lerp(innerMat.emissiveIntensity,1.2+sL*1.6,.05);
+
+  // State-based core color
+  const targetEmissive=new THREE.Color(
+    STATE==='thinking'?0x4400aa:STATE==='listening'?0x660099:STATE==='speaking'?0x880088:0x4a0088);
+  coreMat.emissive.lerp(targetEmissive,.04);
+
+  // ── Camera — very smooth float ────────────────────────────────────────────
+  if(STATE==='speaking'){camTZ=12.5;camTY=1.4;}
+  else if(STATE==='thinking'){camTZ=15.5;camTY=2.2;}
+  else{camTZ=14;camTY=1.8;}
+  cam.position.x=lerp(cam.position.x,Math.sin(t*.10)*.45,.018);
+  cam.position.y=lerp(cam.position.y,camTY+Math.sin(t*.07)*.22,.018);
+  cam.position.z=lerp(cam.position.z,camTZ,.018);
+  cam.lookAt(0,0,0);
+
+  // ── State animations ──────────────────────────────────────────────────────
+  sonars.forEach(s=>s.material.opacity=0);
+  tDots.forEach(d=>d.material.opacity=0);
+  tendrils.forEach(({m})=>m.opacity=0);
+
+  if(STATE==='idle'){
+    // Gentle pulse — metallic highlights do the work here
+  }else if(STATE==='listening'){
+    sonars.forEach((s,i)=>{
+      const spd=1.9+sL*3.2;
+      const ph=(t*spd+i*.42)%(Math.PI*2), prog=ph/(Math.PI*2);
+      const rad=.1+prog*(2.5+sL*1.8);
+      s.geometry.dispose();
+      s.geometry=new THREE.RingGeometry(rad-.022,rad,64);
+      s.material.opacity=(.6+sL*.4)*(1-prog);
+    });
+  }else if(STATE==='thinking'){
+    tDots.forEach(d=>{
+      const{orb,n,i,rad,spd}=d.userData;
+      const a=t*spd+i*(Math.PI*2/n);
+      const tilt=[0,Math.PI/4,Math.PI/3][orb];
+      d.position.set(
+        Math.cos(a)*rad,
+        Math.sin(a)*rad*Math.cos(tilt)+Math.sin(t*.45+i)*.08,
+        Math.sin(a)*rad*Math.sin(tilt));
+      const b=.3+.7*((Math.sin(a-t*spd)+1)/2);
+      d.material.color.setRGB(b*.6,0,1);
+      d.material.opacity=lerp(d.material.opacity,.92,.08);
+    });
+  }else if(STATE==='speaking'){
+    tendrils.forEach(({g,m,ang},ix)=>{
+      const a=ang+t*1.0+ix*.058;
+      const rr=.65+sL*2.4+Math.abs(Math.sin(t*9+ix))*sL*.75;
+      const ex=Math.cos(a)*rr+(Math.random()-.5)*.08*sL;
+      const ey=Math.sin(a)*rr+(Math.random()-.5)*.08*sL;
+      g.setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(ex,ey,0)]);
+      m.opacity=lerp(m.opacity,sL>.06?(.22+sL*.78):0,.11);
+      m.color.setRGB(.5+sL*.3,0,1);
+    });
+  }
+
+  // ── Bar equalizer ─────────────────────────────────────────────────────────
+  const showBars=STATE!=='idle'||sL>.01;
+  eqBars.forEach(({geo,mat,angle,positions},i)=>{
+    const h=sB[i]*4.5+.04;
+    const ir=EQ_R, or_=EQ_R+h;
+    const px=Math.cos(angle), py=Math.sin(angle);
+    positions[0]=px*ir; positions[1]=py*ir; positions[2]=0;
+    positions[3]=px*or_; positions[4]=py*or_; positions[5]=0;
+    geo.attributes.position.needsUpdate=true;
+    mat.opacity=lerp(mat.opacity,showBars?(.18+sB[i]*1.6+sL*.42):0,.08);
+    const heat=Math.min(1,sB[i]*5.5);
+    mat.color.setRGB(.4+heat*.45, 0, 1); // purple → magenta with energy
+  });
+
+  // ── Particles ─────────────────────────────────────────────────────────────
+  const dr=1+sL*3.0;
+  for(let i=0;i<PC;i++){
+    pP[i*3]+=pV[i*3]*dr; pP[i*3+1]+=pV[i*3+1]*dr; pP[i*3+2]+=pV[i*3+2]*dr;
+    const d2=pP[i*3]**2+pP[i*3+1]**2+pP[i*3+2]**2;
+    if(d2>105||d2<4.5){ pV[i*3]*=-1; pV[i*3+1]*=-1; pV[i*3+2]*=-1 }
+  }
+  pG.attributes.position.needsUpdate=true;
+
+  composer.render();
+}
+frame();
+
+// ── Data poll ─────────────────────────────────────────────────────────────────
+async function poll(){
+  try{
+    const r=await fetch('/data');
+    if(r.ok){
+      const d=await r.json();
+      if(d.state) STATE=d.state;
+      if(typeof d.level==='number') LEVEL=d.level;
+      if(Array.isArray(d.bars)&&d.bars.length===28) BARS=d.bars;
+      if(Array.isArray(d.msgs)) MSGS=d.msgs;
+      if(d.user&&!USERNAME){
+        USERNAME=d.user;
+        topCenterEl.textContent='WILLKOMMEN, SIR '+USERNAME;
+      }
+    }
+  }catch(_){}
+  setTimeout(poll,100);
+}
+poll();
+window.setState=s=>{STATE=s};
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  Remote Chat + Mikrofon (für Zugriff von jedem Gerät)
+// ══════════════════════════════════════════════════════════════════════════════
+const chatInput=document.getElementById('chat-input');
+const btnSend=document.getElementById('btn-send');
+const btnMic=document.getElementById('btn-mic');
+let mediaRec=null, audioChunks=[];
+
+// ── Text senden ──────────────────────────────────────────────────────────────
+async function sendText(){
+  const text=chatInput.value.trim();
+  if(!text) return;
+  chatInput.value='';
+  chatInput.disabled=true; btnSend.disabled=true;
+  try{
+    const r=await fetch('/ask',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text})
+    });
+    if(!r.ok) console.error('ask error',r.status);
+  }catch(e){console.error(e)}
+  chatInput.disabled=false; btnSend.disabled=false;
+  chatInput.focus();
+}
+btnSend.addEventListener('click', sendText);
+chatInput.addEventListener('keydown', e=>{if(e.key==='Enter')sendText()});
+
+// ── Mikrofon-Aufnahme ────────────────────────────────────────────────────────
+btnMic.addEventListener('click', async ()=>{
+  if(mediaRec&&mediaRec.state==='recording'){
+    mediaRec.stop(); return;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRec=new MediaRecorder(stream,{mimeType:'audio/webm;codecs=opus'});
+    audioChunks=[];
+    mediaRec.ondataavailable=e=>{if(e.data.size>0) audioChunks.push(e.data)};
+    mediaRec.onstop=async()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      btnMic.classList.remove('recording');
+      if(!audioChunks.length) return;
+      const blob=new Blob(audioChunks,{type:'audio/webm'});
+      chatInput.disabled=true;
+      try{
+        const r=await fetch('/voice',{
+          method:'POST',
+          headers:{'Content-Type':'audio/webm'},
+          body:blob
+        });
+        if(!r.ok) console.error('voice error',r.status);
+      }catch(e){console.error(e)}
+      chatInput.disabled=false;
+    };
+    mediaRec.start();
+    btnMic.classList.add('recording');
+  }catch(e){console.error('Kein Mikrofon:',e)}
+});
+
+// ── Fullscreen — mehrere Versuche für maximale Kompatibilität ────────────────
+function goFS(){
+  const el=document.documentElement;
+  const fn=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen;
+  if(fn) fn.call(el).catch(()=>{});
+}
+// Sofort versuchen (funktioniert in Edge/Chrome App-Modus ohne User-Geste)
+goFS();
+// Nochmal nach 1s falls der Browser noch nicht bereit war
+setTimeout(goFS, 1000);
+// Fallback: beim ersten Klick irgendwo auf die Seite
+document.addEventListener('click', goFS, {once:true});
+// Escape beendet Fullscreen nicht (verhindert versehentliches Schließen)
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement) setTimeout(goFS, 400);
+});
+</script>
+</body>
+</html>
