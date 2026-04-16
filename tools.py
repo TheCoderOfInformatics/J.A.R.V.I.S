@@ -929,10 +929,24 @@ def get_weather(city: str) -> str:
 @_tool("get_time_and_date")
 def get_time_and_date() -> str:
     now = datetime.datetime.now()
+    week_days = [
+        "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+        "Freitag", "Samstag", "Sonntag",
+    ]
+    months = [
+        "Januar", "Februar", "März", "April", "Mai", "Juni",
+        "Juli", "August", "September", "Oktober", "November", "Dezember",
+    ]
+    weekday = week_days[now.weekday()]
+    month = months[now.month - 1]
     return (
-        f"It is {now.strftime('%H:%M:%S')} on "
-        f"{now.strftime('%A, %d. %B %Y')}."
+        f"Es ist {now.strftime('%H:%M:%S')} am {weekday}, {now.day}. {month} {now.year}."
     )
+
+
+@_tool("get_time")
+def get_time() -> str:
+    return get_time_and_date()
 
 
 @_tool("calculate")
@@ -1250,6 +1264,10 @@ def schedule_task(name: str, interval_minutes: float, action: str) -> str:
         # Alten Task gleichen Namens entfernen
         _sched_heap[:] = [(t, n, i, a) for t, n, i, a in _sched_heap if n != name]
         heapq.heappush(_sched_heap, (next_run, name, interval_sec, action))
+        _save_scheduled_tasks([
+            {"name": n, "interval_minutes": i / 60, "action": a}
+            for _, n, i, a in _sched_heap
+        ])
     m = int(interval_minutes)
     s = int((interval_minutes - m) * 60)
     dur = f"{m} Min." + (f" {s} Sek." if s else "")
@@ -1281,6 +1299,10 @@ def cancel_task(name: str) -> str:
         before = len(_sched_heap)
         _sched_heap[:] = [(t, n, i, a) for t, n, i, a in _sched_heap if n != name]
         heapq.heapify(_sched_heap)
+        _save_scheduled_tasks([
+            {"name": n, "interval_minutes": i / 60, "action": a}
+            for _, n, i, a in _sched_heap
+        ])
     if len(_sched_heap) < before:
         return f"Aufgabe '{name}' wurde abgebrochen."
     return f"Keine Aufgabe mit dem Namen '{name}' gefunden."
@@ -1866,6 +1888,7 @@ def get_location() -> str:
 
 _JARVIS_ROOT = Path(__file__).parent
 _LEARNINGS_FILE = _JARVIS_ROOT / "data" / "learnings.json"
+_TASKS_FILE = _JARVIS_ROOT / "data" / "tasks.json"
 _BACKUP_DIR = _JARVIS_ROOT / "backups"
 
 _ALLOWED_FILES = {"tools.py", "Main.py", "hologram.py", "hologram.html"}
@@ -1888,6 +1911,43 @@ def _save_learnings(lessons: list):
         json.dumps(lessons, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _load_scheduled_tasks() -> list:
+    if _TASKS_FILE.exists():
+        try:
+            return json.loads(_TASKS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_scheduled_tasks(tasks: list):
+    _TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _TASKS_FILE.write_text(
+        json.dumps(tasks, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _load_schedule_from_disk() -> None:
+    tasks = _load_scheduled_tasks()
+    now = time.time()
+    with _sched_lock:
+        for item in tasks:
+            try:
+                name = item.get("name")
+                interval_minutes = float(item.get("interval_minutes", 0))
+                action = item.get("action", "")
+                if not name or interval_minutes <= 0 or not action:
+                    continue
+                interval_sec = interval_minutes * 60
+                heapq.heappush(_sched_heap, (now + interval_sec, name, interval_sec, action))
+            except Exception:
+                continue
+
+
+_load_schedule_from_disk()
 
 
 def _backup_file(filename: str):

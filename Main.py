@@ -269,13 +269,22 @@ Du bist JARVIS im autonomen Hintergrund-Modus. Sei proaktiv und nützlich.
 Nutze deine Tools aktiv — du darfst und sollst selbständig handeln.
 
 Prüfe JETZT folgendes (nutze die passenden Tools):
-1. get_time → Ist es morgens (7-9 Uhr)? → Kurzes Wetter-Briefing mit get_weather.
+1. get_time_and_date → Ist es morgens (7-9 Uhr)? → Kurzes Wetter-Briefing mit get_weather.
    Ist es spätabends (23-1 Uhr)? → Erinnerung an Schlaf.
 2. read_notes → Gibt es Notizen mit Daten, die heute oder morgen fällig sind?
 3. web_search → Gibt es Breaking News die Sir wissen sollte? NUR bei wirklich großen Ereignissen.
 
 Antworte SILENT wenn nichts Relevantes vorliegt.
 Sonst: max. 2 Sätze, Deutsch, kein Markdown, JARVIS-Ton. Sei direkt und konkret.\
+"""
+
+_PROACTIVE_NIGHTLY_SUMMARY = """\
+Du bist JARVIS im autonomen Hintergrund-Modus. Erstelle eine kurze Abend-Zusammenfassung.
+Nutze deine Tools:
+1. get_time_and_date für aktuelle Zeit und Wochentag.
+2. read_notes für Aufgaben morgen.
+3. get_system_info, falls ein kritisches Problem vorliegt.
+Antworte SILENT wenn nichts Relevantes ist. Sonst: max. 2 Sätze, Deutsch, kein Markdown.\
 """
 
 _PROACTIVE_SELF_IMPROVE = """\
@@ -1559,6 +1568,13 @@ def _automation_loop(kernel: "JarvisKernel", tts: "TTSEngine"):
     last_sys_check     = 0.0
     last_context_check = 0.0
     morning_done       = False   # Morgen-Briefing nur 1× pro Sitzung
+    nightly_done       = False   # Abend-Zusammenfassung nur 1× pro Tag
+
+    threading.Thread(
+        target=_run_background,
+        args=(kernel, tts, _PROACTIVE_SYSTEM_CHECK, "System-Startup"),
+        daemon=True,
+    ).start()
 
     # Morgen-Briefing beim ersten Start (nur zwischen 7–10 Uhr)
     hour = datetime.datetime.now().hour
@@ -1618,14 +1634,29 @@ def _automation_loop(kernel: "JarvisKernel", tts: "TTSEngine"):
                 daemon=True,
             ).start()
 
-        # ── Kontext-Check alle 10 Min. (nur wenn Nutzer aktiv war) ───────────
-        if idle < 600 and (now - last_context_check) >= 600:
+        # ── Kontext-Check alle 10 Min. ───────────────────────────────────────
+        if (now - last_context_check) >= 600:
             last_context_check = now
             threading.Thread(
                 target=_run_background,
                 args=(kernel, tts, _PROACTIVE_CONTEXT_CHECK, "Kontext"),
                 daemon=True,
             ).start()
+
+        # ── Abend-Zusammenfassung einmal täglich ───────────────────────────────
+        if 22 <= hour < 24 and not nightly_done:
+            nightly_done = True
+            threading.Thread(
+                target=_run_background,
+                args=(kernel, tts, _PROACTIVE_NIGHTLY_SUMMARY, "Abend"),
+                daemon=True,
+            ).start()
+
+        # Reset für nächsten Tag
+        if hour < 2:
+            nightly_done = False
+        if hour >= 11:
+            morning_done = False
 
         # ── Selbstreflexion alle 60 Min. (nachts 2-5 Uhr = "Wartungsfenster") ─
         if not hasattr(_automation_loop, '_last_reflect'):
