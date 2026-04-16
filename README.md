@@ -59,6 +59,12 @@ cd Jarvis-da-Vinci
 pip install -r requirements.txt
 ```
 
+### Verbesserte Version
+
+Eine neue, modulare Version wurde als `jarvis_v2` hinzugefügt. Sie bietet
+proaktive Hintergrund-Tasks, persistente Aufgabenplanung und ein saubereres
+Architekturdesign.
+
 Erstelle `.env`:
 ```
 GROQ_API_KEY=gsk_...
